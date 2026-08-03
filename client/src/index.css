@@ -189,3 +189,19 @@
         justify-content: center;
     }
 }
+.logged-user {
+    margin: 4px 0 0;
+    color: #9ca3af;
+    font-size: 13px;
+}
+.bubble {
+    display: flex;
+    flex-direction: column;
+}
+
+.bubble small {
+    margin-top: 5px;
+    align-self: flex-end;
+    font-size: 10px;
+    opacity: 0.65;
+}

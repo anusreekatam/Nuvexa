@@ -1,8 +1,23 @@
-import { useEffect, useState } from "react";
+import {
+    useEffect,
+    useRef,
+    useState
+} from "react";
+
 import { useNavigate } from "react-router-dom";
+
+import Sidebar from "../components/Sidebar";
+import ChatHeader from "../components/ChatHeader";
+import MessageList from "../components/MessageList";
+import MessageInput from "../components/MessageInput";
 
 function Chat() {
     const navigate = useNavigate();
+    const messagesEndRef = useRef(null);
+
+    const savedUser = JSON.parse(
+        localStorage.getItem("registeredUser")
+    );
 
     const users = [
         { name: "Ravi", status: "Online" },
@@ -15,7 +30,8 @@ function Chat() {
     const [search, setSearch] = useState("");
 
     const [messages, setMessages] = useState(() => {
-        const savedMessages = localStorage.getItem("chatMessages");
+        const savedMessages =
+            localStorage.getItem("chatMessages");
 
         return savedMessages
             ? JSON.parse(savedMessages)
@@ -23,11 +39,13 @@ function Chat() {
                   Ravi: [
                       {
                           text: "Hey! How are you?",
-                          type: "received"
+                          type: "received",
+                          time: "10:20 AM"
                       },
                       {
                           text: "I am good. What about you?",
-                          type: "sent"
+                          type: "sent",
+                          time: "10:21 AM"
                       }
                   ],
                   Anu: [],
@@ -42,11 +60,11 @@ function Chat() {
         );
     }, [messages]);
 
-    const filteredUsers = users.filter((user) =>
-        user.name
-            .toLowerCase()
-            .includes(search.toLowerCase())
-    );
+    useEffect(() => {
+        messagesEndRef.current?.scrollIntoView({
+            behavior: "smooth"
+        });
+    }, [messages, selectedUser]);
 
     function logout() {
         localStorage.removeItem("isLoggedIn");
@@ -66,7 +84,11 @@ function Chat() {
                 ...messages[selectedUser.name],
                 {
                     text: message,
-                    type: "sent"
+                    type: "sent",
+                    time: new Date().toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit"
+                    })
                 }
             ]
         });
@@ -76,97 +98,33 @@ function Chat() {
 
     return (
         <div className="chat-page">
-            <aside className="sidebar">
-                <div className="sidebar-header">
-                    <h2>Nuvexa</h2>
-
-                    <button onClick={logout}>
-                        Logout
-                    </button>
-                </div>
-
-                <input
-                    className="search"
-                    type="text"
-                    placeholder="Search users..."
-                    value={search}
-                    onChange={(e) =>
-                        setSearch(e.target.value)
-                    }
-                />
-
-                <div className="users-list">
-                    {filteredUsers.map((user) => (
-                        <div
-                            key={user.name}
-                            className={`chat-user ${
-                                selectedUser.name === user.name
-                                    ? "active"
-                                    : ""
-                            }`}
-                            onClick={() =>
-                                setSelectedUser(user)
-                            }
-                        >
-                            <div className="avatar">
-                                {user.name[0]}
-                            </div>
-
-                            <div>
-                                <h3>{user.name}</h3>
-                                <p>{user.status}</p>
-                            </div>
-                        </div>
-                    ))}
-
-                    {filteredUsers.length === 0 && (
-                        <p>No users found</p>
-                    )}
-                </div>
-            </aside>
+            <Sidebar
+                users={users}
+                selectedUser={selectedUser}
+                setSelectedUser={setSelectedUser}
+                search={search}
+                setSearch={setSearch}
+                savedUser={savedUser}
+                logout={logout}
+            />
 
             <section className="chat-window">
-                <header className="chat-window-header">
-                    <div>
-                        <h2>{selectedUser.name}</h2>
-                        <p>{selectedUser.status}</p>
-                    </div>
-                </header>
+                <ChatHeader
+                    selectedUser={selectedUser}
+                />
 
-                <div className="chat-messages">
-                    {messages[selectedUser.name].length === 0 ? (
-                        <p>No messages yet</p>
-                    ) : (
-                        messages[selectedUser.name].map(
-                            (msg, index) => (
-                                <div
-                                    key={index}
-                                    className={`bubble ${msg.type}`}
-                                >
-                                    {msg.text}
-                                </div>
-                            )
-                        )
-                    )}
-                </div>
+                <MessageList
+                    messages={messages}
+                    selectedUser={selectedUser}
+                    messagesEndRef={messagesEndRef}
+                />
 
-                <form
-                    className="chat-input"
-                    onSubmit={sendMessage}
-                >
-                    <input
-                        type="text"
-                        placeholder={`Message ${selectedUser.name}...`}
-                        value={message}
-                        onChange={(e) =>
-                            setMessage(e.target.value)
-                        }
-                    />
-
-                    <button type="submit">
-                        Send
-                    </button>
-                </form>
+                <MessageInput
+                    message={message}
+                    setMessage={setMessage}
+                    sendMessage={sendMessage}
+                    selectedUser={selectedUser}
+                />
             </section>
         </div>
     );
