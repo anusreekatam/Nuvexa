@@ -2,7 +2,7 @@
     min-height: 100vh;
     display: grid;
     place-items: center;
-    background: #070b18;
+    background: lightgoldenrodyellow;
 }
 
 .auth-card {
@@ -23,7 +23,7 @@
 
 .auth-card p,
 .auth-card span {
-    color: #9ca3af;
+    color: black;
 }
 
 .auth-card input {
@@ -37,4 +37,155 @@
     padding: 13px;
     border-radius: 10px;
     background: linear-gradient(135deg, #8b5cf6, #2563eb);
+}
+.chat-page {
+    min-height: 100vh;
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    background: lightseagreen;
+}
+
+.sidebar {
+    padding: 22px;
+    border-right: 1px solid #ffffff18;
+    background: rgb(85, 116, 187);
+}
+
+.sidebar-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.sidebar-header button {
+    padding: 9px 14px;
+    border-radius: 8px;
+    background: #ffffff12;
+}
+
+.search {
+    width: 100%;
+    margin: 25px 0;
+    padding: 12px;
+    border: 0;
+    outline: 0;
+    border-radius: 10px;
+    color: white;
+    background: rgb(72, 74, 217);
+}
+
+.users-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.chat-user {
+    padding: 12px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border-radius: 12px;
+    cursor: pointer;
+}
+
+.chat-user:hover,
+.chat-user.active {
+    background: #21b36a10;
+}
+
+.chat-user h3,
+.chat-user p {
+    margin: 3px 0;
+}
+
+.chat-user p {
+    color: #22c55e;
+    font-size: 12px;
+}
+
+.chat-window {
+    display: grid;
+    grid-template-rows: 80px 1fr 80px;
+}
+
+.chat-window-header {
+    padding: 18px 25px;
+    border-bottom: 1px solid #ffffff18;
+}
+
+.chat-window-header h2,
+.chat-window-header p {
+    margin: 3px 0;
+}
+
+.chat-window-header p {
+    color: #22c55e;
+    font-size: 12px;
+}
+
+.chat-messages {
+    padding: 25px;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    overflow-y: auto;
+}
+
+.bubble {
+    max-width: 65%;
+    padding: 12px 15px;
+    border-radius: 15px;
+}
+
+.bubble.received {
+    align-self: flex-start;
+    background: #ffffff12;
+}
+
+.bubble.sent {
+    align-self: flex-end;
+    background: linear-gradient(135deg, #8b5cf6, #2563eb);
+}
+
+.chat-input {
+    padding: 15px 25px;
+    display: flex;
+    gap: 12px;
+    border-top: 1px solid red;
+}
+
+.chat-input input {
+    flex: 1;
+    padding: 13px;
+    border: 0;
+    outline: 0;
+    border-radius: 10px;
+}
+
+.chat-input button {
+    padding: 0 24px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #8b5cf6, #2563eb);
+}
+
+@media (max-width: 700px) {
+    .chat-page {
+        grid-template-columns: 100px 1fr;
+    }
+
+    .sidebar {
+        padding: 12px;
+    }
+
+    .sidebar-header h2,
+    .sidebar-header button,
+    .search,
+    .chat-user div:last-child {
+        display: none;
+    }
+
+    .chat-user {
+        justify-content: center;
+    }
 }
