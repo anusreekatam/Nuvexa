@@ -1,4 +1,5 @@
 import axios from "axios";
+
 import {
     useEffect,
     useRef,
@@ -12,8 +13,11 @@ import ChatHeader from "../components/ChatHeader";
 import MessageList from "../components/MessageList";
 import MessageInput from "../components/MessageInput";
 
+import socket from "../socket";
+
 function Chat() {
     const navigate = useNavigate();
+
     const messagesEndRef = useRef(null);
 
     const savedUser = JSON.parse(
@@ -21,12 +25,18 @@ function Chat() {
     );
 
     const [users, setUsers] = useState([]);
-    const [selectedUser, setSelectedUser] = useState(null);
 
-    const [message, setMessage] = useState("");
-    const [search, setSearch] = useState("");
+    const [selectedUser, setSelectedUser] =
+        useState(null);
 
-    const [messages, setMessages] = useState([]);
+    const [message, setMessage] =
+        useState("");
+
+    const [search, setSearch] =
+        useState("");
+
+    const [messages, setMessages] =
+        useState([]);
 
     useEffect(() => {
         async function fetchUsers() {
@@ -34,19 +44,25 @@ function Chat() {
                 const token =
                     localStorage.getItem("token");
 
-                const response = await axios.get(
-                    "http://localhost:5000/api/auth/users",
-                    {
-                        headers: {
-                            Authorization: `Bearer ${token}`
+                const response =
+                    await axios.get(
+                        "http://localhost:5000/api/auth/users",
+                        {
+                            headers: {
+                                Authorization:
+                                    `Bearer ${token}`
+                            }
                         }
-                    }
-                );
+                    );
 
                 setUsers(response.data);
 
-                if (response.data.length > 0) {
-                    setSelectedUser(response.data[0]);
+                if (
+                    response.data.length > 0
+                ) {
+                    setSelectedUser(
+                        response.data[0]
+                    );
                 }
             } catch (error) {
                 console.error(
@@ -60,6 +76,15 @@ function Chat() {
     }, []);
 
     useEffect(() => {
+        if (savedUser?.id) {
+            socket.emit(
+                "join_user",
+                savedUser.id
+            );
+        }
+    }, [savedUser?.id]);
+
+    useEffect(() => {
         async function fetchMessages() {
             if (!selectedUser) {
                 return;
@@ -69,16 +94,20 @@ function Chat() {
                 const token =
                     localStorage.getItem("token");
 
-                const response = await axios.get(
-                    `http://localhost:5000/api/messages/${selectedUser.id}`,
-                    {
-                        headers: {
-                            Authorization: `Bearer ${token}`
+                const response =
+                    await axios.get(
+                        `http://localhost:5000/api/messages/${selectedUser.id}`,
+                        {
+                            headers: {
+                                Authorization:
+                                    `Bearer ${token}`
+                            }
                         }
-                    }
-                );
+                    );
 
-                setMessages(response.data);
+                setMessages(
+                    response.data
+                );
             } catch (error) {
                 console.error(
                     "Unable to fetch messages:",
@@ -91,15 +120,49 @@ function Chat() {
     }, [selectedUser]);
 
     useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({
-            behavior: "smooth"
-        });
+        function handleReceiveMessage(
+            newMessage
+        ) {
+            if (
+                selectedUser &&
+                newMessage.senderId ===
+                    selectedUser.id
+            ) {
+                setMessages(
+                    (prevMessages) => [
+                        ...prevMessages,
+                        newMessage
+                    ]
+                );
+            }
+        }
+
+        socket.on(
+            "receive_message",
+            handleReceiveMessage
+        );
+
+        return () => {
+            socket.off(
+                "receive_message",
+                handleReceiveMessage
+            );
+        };
+    }, [selectedUser]);
+
+    useEffect(() => {
+        messagesEndRef.current
+            ?.scrollIntoView({
+                behavior: "smooth"
+            });
     }, [messages]);
 
     function logout() {
         localStorage.removeItem("token");
         localStorage.removeItem("user");
-        localStorage.removeItem("isLoggedIn");
+        localStorage.removeItem(
+            "isLoggedIn"
+        );
 
         navigate("/login");
     }
@@ -118,23 +181,33 @@ function Chat() {
             const token =
                 localStorage.getItem("token");
 
-            const response = await axios.post(
-                "http://localhost:5000/api/messages",
-                {
-                    receiverId: selectedUser.id,
-                    text: message
-                },
-                {
-                    headers: {
-                        Authorization: `Bearer ${token}`
+            const response =
+                await axios.post(
+                    "http://localhost:5000/api/messages",
+                    {
+                        receiverId:
+                            selectedUser.id,
+                        text: message
+                    },
+                    {
+                        headers: {
+                            Authorization:
+                                `Bearer ${token}`
+                        }
                     }
-                }
+                );
+
+            setMessages(
+                (prevMessages) => [
+                    ...prevMessages,
+                    response.data
+                ]
             );
 
-            setMessages([
-                ...messages,
+            socket.emit(
+                "send_message",
                 response.data
-            ]);
+            );
 
             setMessage("");
         } catch (error) {
@@ -148,7 +221,9 @@ function Chat() {
     if (!selectedUser) {
         return (
             <div className="auth-page">
-                <p>No users available to chat</p>
+                <p>
+                    No users available to chat
+                </p>
             </div>
         );
     }
@@ -157,8 +232,12 @@ function Chat() {
         <div className="chat-page">
             <Sidebar
                 users={users}
-                selectedUser={selectedUser}
-                setSelectedUser={setSelectedUser}
+                selectedUser={
+                    selectedUser
+                }
+                setSelectedUser={
+                    setSelectedUser
+                }
                 search={search}
                 setSearch={setSearch}
                 savedUser={savedUser}
@@ -167,20 +246,30 @@ function Chat() {
 
             <section className="chat-window">
                 <ChatHeader
-                    selectedUser={selectedUser}
+                    selectedUser={
+                        selectedUser
+                    }
                 />
 
                 <MessageList
                     messages={messages}
-                    currentUser={savedUser}
-                    messagesEndRef={messagesEndRef}
+                    currentUser={
+                        savedUser
+                    }
+                    messagesEndRef={
+                        messagesEndRef
+                    }
                 />
 
                 <MessageInput
                     message={message}
                     setMessage={setMessage}
-                    sendMessage={sendMessage}
-                    selectedUser={selectedUser}
+                    sendMessage={
+                        sendMessage
+                    }
+                    selectedUser={
+                        selectedUser
+                    }
                 />
             </section>
         </div>

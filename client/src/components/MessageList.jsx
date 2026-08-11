@@ -10,31 +10,42 @@ function MessageList({
             ) : (
                 messages.map((msg) => {
                     const type =
-                        msg.senderId === currentUser.id
+                        msg.senderId ===
+                        currentUser.id
                             ? "sent"
                             : "received";
 
                     const time =
                         new Date(
                             msg.createdAt
-                        ).toLocaleTimeString([], {
-                            hour: "2-digit",
-                            minute: "2-digit"
-                        });
+                        ).toLocaleTimeString(
+                            [],
+                            {
+                                hour: "2-digit",
+                                minute: "2-digit"
+                            }
+                        );
 
                     return (
                         <div
                             key={msg.id}
                             className={`bubble ${type}`}
                         >
-                            <span>{msg.text}</span>
-                            <small>{time}</small>
+                            <span>
+                                {msg.text}
+                            </span>
+
+                            <small>
+                                {time}
+                            </small>
                         </div>
                     );
                 })
             )}
 
-            <div ref={messagesEndRef}></div>
+            <div
+                ref={messagesEndRef}
+            ></div>
         </div>
     );
 }
