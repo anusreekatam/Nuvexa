@@ -1,44 +1,65 @@
+import axios from "axios";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 function Login() {
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
+
     const navigate = useNavigate();
 
-    function handleSubmit(e) {
-    e.preventDefault();
+    async function handleSubmit(e) {
+        e.preventDefault();
 
-    if (email.trim() === "" || password.trim() === "") {
-        alert("Please fill all fields");
-        return;
+        if (
+            email.trim() === "" ||
+            password.trim() === ""
+        ) {
+            alert("Please fill all fields");
+            return;
+        }
+
+        try {
+            const response = await axios.post(
+                "http://localhost:5000/api/auth/login",
+                {
+                    email,
+                    password
+                }
+            );
+
+            localStorage.setItem(
+                "token",
+                response.data.token
+            );
+
+            localStorage.setItem(
+                "user",
+                JSON.stringify(response.data.user)
+            );
+
+            localStorage.setItem(
+                "isLoggedIn",
+                "true"
+            );
+
+            alert(response.data.message);
+
+            navigate("/chat");
+        } catch (error) {
+            alert(
+                error.response?.data?.message ||
+                "Login failed"
+            );
+        }
     }
 
-    const userData = localStorage.getItem("registeredUser");
-
-    const savedUser = userData
-        ? JSON.parse(userData)
-        : null;
-
-    if (!savedUser) {
-        alert("No account found. Please register first.");
-        return;
-    }
-
-    if (
-        email === savedUser.email &&
-        password === savedUser.password
-    ) {
-        localStorage.setItem("isLoggedIn", "true");
-        alert("Login successful");
-        navigate("/chat");
-    } else {
-        alert("Invalid email or password");
-    }
-}
     return (
         <div className="auth-page">
-            <form className="auth-card" onSubmit={handleSubmit}>
+            <form
+                className="auth-card"
+                onSubmit={handleSubmit}
+            >
                 <h1>Welcome Back</h1>
                 <p>Login to continue to Nuvexa</p>
 
@@ -46,22 +67,29 @@ function Login() {
                     type="email"
                     placeholder="Email"
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    onChange={(e) =>
+                        setEmail(e.target.value)
+                    }
                 />
 
                 <input
                     type="password"
                     placeholder="Password"
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    onChange={(e) =>
+                        setPassword(e.target.value)
+                    }
                 />
 
-                <button type="submit">Login</button>
+                <button type="submit">
+                    Login
+                </button>
 
                 <span>
                     New to Nuvexa?{" "}
-                    <Link to="/register">Create account</Link>
-                    
+                    <Link to="/register">
+                        Create account
+                    </Link>
                 </span>
             </form>
         </div>

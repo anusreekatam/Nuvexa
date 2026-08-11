@@ -1,3 +1,4 @@
+import axios from "axios";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
@@ -8,7 +9,7 @@ function Register() {
 
     const navigate = useNavigate();
 
-    function handleSubmit(e) {
+    async function handleSubmit(e) {
         e.preventDefault();
 
         if (
@@ -25,24 +26,32 @@ function Register() {
             return;
         }
 
-                        const user = {
-            name,
-            email,
-            password
-        };
+        try {
+            const response = await axios.post(
+                "http://localhost:5000/api/auth/register",
+                {
+                    name,
+                    email,
+                    password
+                }
+            );
 
-        localStorage.setItem(
-            "registeredUser",
-            JSON.stringify(user)
-        );
-
-alert("Registration successful");
-navigate("/login");
+            alert(response.data.message);
+            navigate("/login");
+        } catch (error) {
+            alert(
+                error.response?.data?.message ||
+                "Registration failed"
+            );
+        }
     }
 
     return (
         <div className="auth-page">
-            <form className="auth-card" onSubmit={handleSubmit}>
+            <form
+                className="auth-card"
+                onSubmit={handleSubmit}
+            >
                 <h1>Create Account</h1>
                 <p>Join Nuvexa and start chatting</p>
 
@@ -50,21 +59,27 @@ navigate("/login");
                     type="text"
                     placeholder="Full Name"
                     value={name}
-                    onChange={(e) => setName(e.target.value)}
+                    onChange={(e) =>
+                        setName(e.target.value)
+                    }
                 />
 
                 <input
                     type="email"
                     placeholder="Email"
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    onChange={(e) =>
+                        setEmail(e.target.value)
+                    }
                 />
 
                 <input
                     type="password"
                     placeholder="Password"
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    onChange={(e) =>
+                        setPassword(e.target.value)
+                    }
                 />
 
                 <button type="submit">
