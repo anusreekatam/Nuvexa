@@ -1,3 +1,4 @@
+import axios from "axios";
 import {
     useEffect,
     useRef,
@@ -16,84 +17,140 @@ function Chat() {
     const messagesEndRef = useRef(null);
 
     const savedUser = JSON.parse(
-        localStorage.getItem("registeredUser")
+        localStorage.getItem("user")
     );
 
-    const users = [
-        { name: "Ravi", status: "Online" },
-        { name: "Anu", status: "Offline" },
-        { name: "Kiran", status: "Online" }
-    ];
+    const [users, setUsers] = useState([]);
+    const [selectedUser, setSelectedUser] = useState(null);
 
-    const [selectedUser, setSelectedUser] = useState(users[0]);
     const [message, setMessage] = useState("");
     const [search, setSearch] = useState("");
 
-    const [messages, setMessages] = useState(() => {
-        const savedMessages =
-            localStorage.getItem("chatMessages");
-
-        return savedMessages
-            ? JSON.parse(savedMessages)
-            : {
-                  Ravi: [
-                      {
-                          text: "Hey! How are you?",
-                          type: "received",
-                          time: "10:20 AM"
-                      },
-                      {
-                          text: "I am good. What about you?",
-                          type: "sent",
-                          time: "10:21 AM"
-                      }
-                  ],
-                  Anu: [],
-                  Kiran: []
-              };
-    });
+    const [messages, setMessages] = useState([]);
 
     useEffect(() => {
-        localStorage.setItem(
-            "chatMessages",
-            JSON.stringify(messages)
-        );
-    }, [messages]);
+        async function fetchUsers() {
+            try {
+                const token =
+                    localStorage.getItem("token");
+
+                const response = await axios.get(
+                    "http://localhost:5000/api/auth/users",
+                    {
+                        headers: {
+                            Authorization: `Bearer ${token}`
+                        }
+                    }
+                );
+
+                setUsers(response.data);
+
+                if (response.data.length > 0) {
+                    setSelectedUser(response.data[0]);
+                }
+            } catch (error) {
+                console.error(
+                    "Unable to fetch users:",
+                    error
+                );
+            }
+        }
+
+        fetchUsers();
+    }, []);
+
+    useEffect(() => {
+        async function fetchMessages() {
+            if (!selectedUser) {
+                return;
+            }
+
+            try {
+                const token =
+                    localStorage.getItem("token");
+
+                const response = await axios.get(
+                    `http://localhost:5000/api/messages/${selectedUser.id}`,
+                    {
+                        headers: {
+                            Authorization: `Bearer ${token}`
+                        }
+                    }
+                );
+
+                setMessages(response.data);
+            } catch (error) {
+                console.error(
+                    "Unable to fetch messages:",
+                    error
+                );
+            }
+        }
+
+        fetchMessages();
+    }, [selectedUser]);
 
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({
             behavior: "smooth"
         });
-    }, [messages, selectedUser]);
+    }, [messages]);
 
     function logout() {
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
         localStorage.removeItem("isLoggedIn");
+
         navigate("/login");
     }
 
-    function sendMessage(e) {
+    async function sendMessage(e) {
         e.preventDefault();
 
-        if (message.trim() === "") {
+        if (
+            message.trim() === "" ||
+            !selectedUser
+        ) {
             return;
         }
 
-        setMessages({
-            ...messages,
-            [selectedUser.name]: [
-                ...messages[selectedUser.name],
-                {
-                    text: message,
-                    type: "sent",
-                    time: new Date().toLocaleTimeString([], {
-                        hour: "2-digit",
-                        minute: "2-digit"
-                    })
-                }
-            ]
-        });
+        try {
+            const token =
+                localStorage.getItem("token");
 
-        setMessage("");
+            const response = await axios.post(
+                "http://localhost:5000/api/messages",
+                {
+                    receiverId: selectedUser.id,
+                    text: message
+                },
+                {
+                    headers: {
+                        Authorization: `Bearer ${token}`
+                    }
+                }
+            );
+
+            setMessages([
+                ...messages,
+                response.data
+            ]);
+
+            setMessage("");
+        } catch (error) {
+            console.error(
+                "Unable to send message:",
+                error
+            );
+        }
+    }
+
+    if (!selectedUser) {
+        return (
+            <div className="auth-page">
+                <p>No users available to chat</p>
+            </div>
+        );
     }
 
     return (
@@ -115,7 +172,7 @@ function Chat() {
 
                 <MessageList
                     messages={messages}
-                    selectedUser={selectedUser}
+                    currentUser={savedUser}
                     messagesEndRef={messagesEndRef}
                 />
 

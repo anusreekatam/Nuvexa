@@ -1,25 +1,37 @@
 function MessageList({
     messages,
-    selectedUser,
+    currentUser,
     messagesEndRef
 }) {
-    const currentMessages =
-        messages[selectedUser.name] || [];
-
     return (
         <div className="chat-messages">
-            {currentMessages.length === 0 ? (
+            {messages.length === 0 ? (
                 <p>No messages yet</p>
             ) : (
-                currentMessages.map((msg, index) => (
-                    <div
-                        key={index}
-                        className={`bubble ${msg.type}`}
-                    >
-                        <span>{msg.text}</span>
-                        <small>{msg.time || "Now"}</small>
-                    </div>
-                ))
+                messages.map((msg) => {
+                    const type =
+                        msg.senderId === currentUser.id
+                            ? "sent"
+                            : "received";
+
+                    const time =
+                        new Date(
+                            msg.createdAt
+                        ).toLocaleTimeString([], {
+                            hour: "2-digit",
+                            minute: "2-digit"
+                        });
+
+                    return (
+                        <div
+                            key={msg.id}
+                            className={`bubble ${type}`}
+                        >
+                            <span>{msg.text}</span>
+                            <small>{time}</small>
+                        </div>
+                    );
+                })
             )}
 
             <div ref={messagesEndRef}></div>

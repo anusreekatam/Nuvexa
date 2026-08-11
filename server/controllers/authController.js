@@ -32,7 +32,10 @@ export async function registerUser(req, res) {
             });
         }
 
-        const hashedPassword = await bcrypt.hash(password, 10);
+        const hashedPassword = await bcrypt.hash(
+            password,
+            10
+        );
 
         const user = await prisma.user.create({
             data: {
@@ -121,6 +124,34 @@ export async function loginUser(req, res) {
 
         return res.status(500).json({
             message: "Unable to login"
+        });
+    }
+}
+
+export async function getUsers(req, res) {
+    try {
+        const users = await prisma.user.findMany({
+            where: {
+                id: {
+                    not: req.user.id
+                }
+            },
+            select: {
+                id: true,
+                name: true,
+                email: true
+            },
+            orderBy: {
+                name: "asc"
+            }
+        });
+
+        return res.status(200).json(users);
+    } catch (error) {
+        console.error("Get users error:", error);
+
+        return res.status(500).json({
+            message: "Unable to fetch users"
         });
     }
 }
