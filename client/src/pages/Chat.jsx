@@ -24,7 +24,8 @@ function Chat() {
         localStorage.getItem("user")
     );
 
-    const [users, setUsers] = useState([]);
+    const [users, setUsers] =
+        useState([]);
 
     const [selectedUser, setSelectedUser] =
         useState(null);
@@ -38,6 +39,10 @@ function Chat() {
     const [messages, setMessages] =
         useState([]);
 
+    const [onlineUsers, setOnlineUsers] =
+        useState([]);
+
+    // Fetch real users from database
     useEffect(() => {
         async function fetchUsers() {
             try {
@@ -57,9 +62,7 @@ function Chat() {
 
                 setUsers(response.data);
 
-                if (
-                    response.data.length > 0
-                ) {
+                if (response.data.length > 0) {
                     setSelectedUser(
                         response.data[0]
                     );
@@ -75,15 +78,54 @@ function Chat() {
         fetchUsers();
     }, []);
 
+    // Join / rejoin socket room
     useEffect(() => {
-        if (savedUser?.id) {
-            socket.emit(
-                "join_user",
-                savedUser.id
-            );
+        function joinUser() {
+            if (savedUser?.id) {
+                socket.emit(
+                    "join_user",
+                    savedUser.id
+                );
+            }
         }
+
+        if (socket.connected) {
+            joinUser();
+        }
+
+        socket.on(
+            "connect",
+            joinUser
+        );
+
+        return () => {
+            socket.off(
+                "connect",
+                joinUser
+            );
+        };
     }, [savedUser?.id]);
 
+    // Receive online users
+    useEffect(() => {
+        function handleOnlineUsers(userIds) {
+            setOnlineUsers(userIds);
+        }
+
+        socket.on(
+            "online_users",
+            handleOnlineUsers
+        );
+
+        return () => {
+            socket.off(
+                "online_users",
+                handleOnlineUsers
+            );
+        };
+    }, []);
+
+    // Fetch selected user's messages
     useEffect(() => {
         async function fetchMessages() {
             if (!selectedUser) {
@@ -105,9 +147,7 @@ function Chat() {
                         }
                     );
 
-                setMessages(
-                    response.data
-                );
+                setMessages(response.data);
             } catch (error) {
                 console.error(
                     "Unable to fetch messages:",
@@ -119,6 +159,7 @@ function Chat() {
         fetchMessages();
     }, [selectedUser]);
 
+    // Receive real-time messages
     useEffect(() => {
         function handleReceiveMessage(
             newMessage
@@ -150,6 +191,7 @@ function Chat() {
         };
     }, [selectedUser]);
 
+    // Auto-scroll
     useEffect(() => {
         messagesEndRef.current
             ?.scrollIntoView({
@@ -163,6 +205,8 @@ function Chat() {
         localStorage.removeItem(
             "isLoggedIn"
         );
+
+        socket.disconnect();
 
         navigate("/login");
     }
@@ -242,12 +286,18 @@ function Chat() {
                 setSearch={setSearch}
                 savedUser={savedUser}
                 logout={logout}
+                onlineUsers={
+                    onlineUsers
+                }
             />
 
             <section className="chat-window">
                 <ChatHeader
                     selectedUser={
                         selectedUser
+                    }
+                    onlineUsers={
+                        onlineUsers
                     }
                 />
 

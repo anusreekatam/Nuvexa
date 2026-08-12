@@ -35,6 +35,8 @@ app.get("/", (req, res) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/messages", messageRoutes);
 
+const onlineUsers = new Map();
+
 io.on("connection", (socket) => {
     console.log(
         "User connected:",
@@ -42,10 +44,22 @@ io.on("connection", (socket) => {
     );
 
     socket.on("join_user", (userId) => {
+        socket.data.userId = userId;
+
         socket.join(`user_${userId}`);
 
+        onlineUsers.set(
+            userId,
+            socket.id
+        );
+
+        io.emit(
+            "online_users",
+            Array.from(onlineUsers.keys())
+        );
+
         console.log(
-            `User ${userId} joined room user_${userId}`
+            `User ${userId} is online`
         );
     });
 
@@ -59,14 +73,30 @@ io.on("connection", (socket) => {
     });
 
     socket.on("disconnect", () => {
+        const userId =
+            socket.data.userId;
+
+        if (
+            userId &&
+            onlineUsers.get(userId) ===
+                socket.id
+        ) {
+            onlineUsers.delete(userId);
+        }
+
+        io.emit(
+            "online_users",
+            Array.from(onlineUsers.keys())
+        );
+
         console.log(
-            "User disconnected:",
-            socket.id
+            `User ${userId} is offline`
         );
     });
 });
 
-const PORT = process.env.PORT || 5000;
+const PORT =
+    process.env.PORT || 5000;
 
 server.listen(PORT, () => {
     console.log(

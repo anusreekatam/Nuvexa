@@ -5,7 +5,8 @@ function Sidebar({
     search,
     setSearch,
     savedUser,
-    logout
+    logout,
+    onlineUsers
 }) {
     const filteredUsers = users.filter((user) =>
         user.name
@@ -18,6 +19,7 @@ function Sidebar({
             <div className="sidebar-header">
                 <div>
                     <h2>Nuvexa</h2>
+
                     <p className="logged-user">
                         {savedUser?.name || "User"}
                     </p>
@@ -33,30 +35,44 @@ function Sidebar({
                 type="text"
                 placeholder="Search users..."
                 value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                onChange={(e) =>
+                    setSearch(e.target.value)
+                }
             />
 
             <div className="users-list">
-                {filteredUsers.map((user) => (
-                    <div
-                        key={user.name}
-                        className={`chat-user ${
-                            selectedUser.name === user.name
-                                ? "active"
-                                : ""
-                        }`}
-                        onClick={() => setSelectedUser(user)}
-                    >
-                        <div className="avatar">
-                            {user.name[0]}
-                        </div>
+                {filteredUsers.map((user) => {
+                    const isOnline =
+                        onlineUsers.includes(user.id);
 
-                        <div>
-                            <h3>{user.name}</h3>
-                            <p>{user.status}</p>
+                    return (
+                        <div
+                            key={user.id}
+                            className={`chat-user ${
+                                selectedUser?.id === user.id
+                                    ? "active"
+                                    : ""
+                            }`}
+                            onClick={() =>
+                                setSelectedUser(user)
+                            }
+                        >
+                            <div className="avatar">
+                                {user.name[0]}
+                            </div>
+
+                            <div>
+                                <h3>{user.name}</h3>
+
+                                <p>
+                                    {isOnline
+                                        ? "Online"
+                                        : "Offline"}
+                                </p>
+                            </div>
                         </div>
-                    </div>
-                ))}
+                    );
+                })}
 
                 {filteredUsers.length === 0 && (
                     <p>No users found</p>
