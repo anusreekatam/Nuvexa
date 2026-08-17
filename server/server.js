@@ -41,6 +41,12 @@ app.get("/", (req, res) => {
     });
 });
 
+app.get("/health", (req, res) => {
+    res.status(200).json({
+        status: "ok"
+    });
+});
+
 app.use("/api/auth", authRoutes);
 app.use("/api/messages", messageRoutes);
 app.use("/api/groups", groupRoutes);
@@ -300,6 +306,7 @@ const PORT =
 
 server.listen(
     PORT,
+    "0.0.0.0",
     () => {
         console.log(
             `Server running on port ${PORT}`
