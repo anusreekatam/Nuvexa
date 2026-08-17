@@ -12,7 +12,11 @@ function Sidebar({
     setSearch,
     savedUser,
     logout,
-    onlineUsers
+    onlineUsers,
+    isUsersLoading,
+    usersError,
+    isGroupsLoading,
+    groupsError
 }) {
     const filteredUsers = users.filter((user) =>
         user.name
@@ -49,7 +53,12 @@ function Sidebar({
             <div className="users-list">
                 <h3 className="list-title">Direct messages</h3>
 
-                {filteredUsers.map((user) => {
+                {isUsersLoading && <p>Loading users...</p>}
+                {usersError && (
+                    <p className="sidebar-error">{usersError}</p>
+                )}
+
+                {!isUsersLoading && filteredUsers.map((user) => {
                     const isOnline =
                         onlineUsers.includes(user.id);
 
@@ -80,7 +89,8 @@ function Sidebar({
                     );
                 })}
 
-                {filteredUsers.length === 0 && (
+                {!isUsersLoading && !usersError &&
+                    filteredUsers.length === 0 && (
                     <p>No users found</p>
                 )}
 
@@ -92,7 +102,12 @@ function Sidebar({
                     />
                 </div>
 
-                {groups.map((group) => (
+                {isGroupsLoading && <p>Loading groups...</p>}
+                {groupsError && (
+                    <p className="sidebar-error">{groupsError}</p>
+                )}
+
+                {!isGroupsLoading && groups.map((group) => (
                     <div
                         key={group.id}
                         className={`chat-user ${
@@ -112,7 +127,8 @@ function Sidebar({
                     </div>
                 ))}
 
-                {groups.length === 0 && (
+                {!isGroupsLoading && !groupsError &&
+                    groups.length === 0 && (
                     <p>No groups yet</p>
                 )}
             </div>

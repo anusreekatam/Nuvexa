@@ -1,27 +1,36 @@
-import axios from "axios";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import api from "../api";
 
 function Login() {
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
+    const [error, setError] = useState("");
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     const navigate = useNavigate();
 
     async function handleSubmit(e) {
         e.preventDefault();
 
+        if (isSubmitting) {
+            return;
+        }
+
+        setError("");
+
         if (
             email.trim() === "" ||
             password.trim() === ""
         ) {
-            alert("Please fill all fields");
+            setError("Please fill all fields");
             return;
         }
 
         try {
-            const response = await axios.post(
-                "http://localhost:5000/api/auth/login",
+            setIsSubmitting(true);
+            const response = await api.post(
+                "/auth/login",
                 {
                     email,
                     password
@@ -43,14 +52,14 @@ function Login() {
                 "true"
             );
 
-            alert(response.data.message);
-
             navigate("/chat");
         } catch (error) {
-            alert(
+            setError(
                 error.response?.data?.message ||
-                "Login failed"
+                "Unable to reach the server. Please try again."
             );
+        } finally {
+            setIsSubmitting(false);
         }
     }
 
@@ -81,8 +90,14 @@ function Login() {
                     }
                 />
 
-                <button type="submit">
-                    Login
+                {error && (
+                    <p className="form-message error-message">
+                        {error}
+                    </p>
+                )}
+
+                <button type="submit" disabled={isSubmitting}>
+                    {isSubmitting ? "Logging in..." : "Login"}
                 </button>
 
                 <span>

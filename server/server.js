@@ -16,7 +16,9 @@ const server = http.createServer(app);
 
 const io = new Server(server, {
     cors: {
-        origin: "http://localhost:5173",
+        origin:
+            process.env.CLIENT_URL ||
+            "http://localhost:5173",
         methods: ["GET", "POST"]
     }
 });
@@ -25,7 +27,9 @@ app.set("io", io);
 
 app.use(
     cors({
-        origin: "http://localhost:5173"
+        origin:
+            process.env.CLIENT_URL ||
+            "http://localhost:5173"
     })
 );
 
@@ -43,12 +47,14 @@ app.use("/api/groups", groupRoutes);
 
 const onlineUsers = new Map();
 
-io.on("connection", (socket) => {
-    console.log(
-        "User connected:",
-        socket.id
+function emitOnlineUsers() {
+    io.emit(
+        "online_users",
+        Array.from(onlineUsers.keys())
     );
+}
 
+io.on("connection", (socket) => {
     socket.on(
         "join_user",
         ({ userId, token }) => {
@@ -68,21 +74,17 @@ io.on("connection", (socket) => {
                     `user_${decoded.id}`
                 );
 
+                const authenticatedUserId = Number(decoded.id);
+                const userSockets =
+                    onlineUsers.get(authenticatedUserId) ||
+                    new Set();
+
+                userSockets.add(socket.id);
                 onlineUsers.set(
-                    Number(decoded.id),
-                    socket.id
+                    authenticatedUserId,
+                    userSockets
                 );
-
-                io.emit(
-                    "online_users",
-                    Array.from(
-                        onlineUsers.keys()
-                    )
-                );
-
-                console.log(
-                    `User ${decoded.id} is online`
-                );
+                emitOnlineUsers();
             } catch {
                 socket.emit("authentication_error", {
                     message: "Invalid or expired token"
@@ -93,13 +95,39 @@ io.on("connection", (socket) => {
 
     socket.on(
         "send_message",
-        (message) => {
-            io.to(
-                `user_${message.receiverId}`
-            ).emit(
-                "receive_message",
-                message
-            );
+        async (messageId) => {
+            try {
+                const senderId = Number(socket.data.userId);
+                const numericMessageId = Number(messageId);
+
+                if (
+                    !Number.isInteger(senderId) ||
+                    !Number.isInteger(numericMessageId)
+                ) {
+                    return;
+                }
+
+                const message = await prisma.message.findFirst({
+                    where: {
+                        id: numericMessageId,
+                        senderId
+                    }
+                });
+
+                if (message) {
+                    io.to(
+                        `user_${message.receiverId}`
+                    ).emit(
+                        "receive_message",
+                        message
+                    );
+                }
+            } catch (error) {
+                console.error(
+                    "Send direct socket message error:",
+                    error
+                );
+            }
         }
     );
 
@@ -140,32 +168,44 @@ io.on("connection", (socket) => {
 
     socket.on(
         "send_group_message",
-        async (message) => {
+        async (messageId) => {
             try {
-                const groupId = Number(message.groupId);
                 const userId = Number(socket.data.userId);
+                const numericMessageId = Number(messageId);
 
                 if (
-                    !Number.isInteger(groupId) ||
                     !Number.isInteger(userId) ||
-                    Number(message.senderId) !== userId
+                    !Number.isInteger(numericMessageId)
                 ) {
                     return;
                 }
 
-                const membership =
-                    await prisma.groupMember.findUnique({
+                const message =
+                    await prisma.groupMessage.findFirst({
                         where: {
-                            groupId_userId: {
-                                groupId,
-                                userId
+                            id: numericMessageId,
+                            senderId: userId,
+                            group: {
+                                memberships: {
+                                    some: {
+                                        userId
+                                    }
+                                }
+                            }
+                        },
+                        include: {
+                            sender: {
+                                select: {
+                                    id: true,
+                                    name: true
+                                }
                             }
                         }
                     });
 
-                if (membership) {
+                if (message) {
                     socket.to(
-                        `group_${groupId}`
+                        `group_${message.groupId}`
                     ).emit(
                         "receive_group_message",
                         message
@@ -186,16 +226,22 @@ io.on("connection", (socket) => {
             senderId,
             receiverId
         }) => {
-            console.log(
-                `User ${senderId} typing to ${receiverId}`
-            );
+            const authenticatedSenderId =
+                Number(socket.data.userId);
+
+            if (
+                !Number.isInteger(authenticatedSenderId) ||
+                Number(senderId) !== authenticatedSenderId
+            ) {
+                return;
+            }
 
             io.to(
                 `user_${receiverId}`
             ).emit(
                 "user_typing",
                 {
-                    senderId
+                    senderId: authenticatedSenderId
                 }
             );
         }
@@ -207,16 +253,22 @@ io.on("connection", (socket) => {
             senderId,
             receiverId
         }) => {
-            console.log(
-                `User ${senderId} stopped typing to ${receiverId}`
-            );
+            const authenticatedSenderId =
+                Number(socket.data.userId);
+
+            if (
+                !Number.isInteger(authenticatedSenderId) ||
+                Number(senderId) !== authenticatedSenderId
+            ) {
+                return;
+            }
 
             io.to(
                 `user_${receiverId}`
             ).emit(
                 "user_stop_typing",
                 {
-                    senderId
+                    senderId: authenticatedSenderId
                 }
             );
         }
@@ -228,27 +280,17 @@ io.on("connection", (socket) => {
             const userId =
                 socket.data.userId;
 
-            if (
-                userId &&
-                onlineUsers.get(
-                    userId
-                ) === socket.id
-            ) {
-                onlineUsers.delete(
-                    userId
-                );
+            const userSockets = onlineUsers.get(userId);
+
+            if (userSockets) {
+                userSockets.delete(socket.id);
+
+                if (userSockets.size === 0) {
+                    onlineUsers.delete(userId);
+                }
             }
 
-            io.emit(
-                "online_users",
-                Array.from(
-                    onlineUsers.keys()
-                )
-            );
-
-            console.log(
-                `User ${userId} is offline`
-            );
+            emitOnlineUsers();
         }
     );
 });

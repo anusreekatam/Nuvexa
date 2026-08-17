@@ -17,6 +17,11 @@ function GroupCreator({ users, onCreateGroup }) {
 
     async function handleSubmit(event) {
         event.preventDefault();
+
+        if (isCreating) {
+            return;
+        }
+
         setError("");
 
         if (!name.trim() || memberIds.length === 0) {

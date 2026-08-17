@@ -1,5 +1,3 @@
-import axios from "axios";
-
 import {
     useEffect,
     useRef,
@@ -14,6 +12,21 @@ import MessageList from "../components/MessageList";
 import MessageInput from "../components/MessageInput";
 
 import socket from "../socket";
+import api from "../api";
+
+function mergeMessages(history, currentMessages) {
+    const messagesById = new Map();
+
+    [...history, ...currentMessages].forEach((currentMessage) => {
+        messagesById.set(currentMessage.id, currentMessage);
+    });
+
+    return Array.from(messagesById.values()).sort(
+        (firstMessage, secondMessage) =>
+            new Date(firstMessage.createdAt) -
+            new Date(secondMessage.createdAt)
+    );
+}
 
 function Chat() {
     const navigate = useNavigate();
@@ -37,6 +50,18 @@ function Chat() {
 
     const [messages, setMessages] = useState([]);
     const [onlineUsers, setOnlineUsers] = useState([]);
+    const [isUsersLoading, setIsUsersLoading] = useState(true);
+    const [usersError, setUsersError] = useState("");
+    const [isGroupsLoading, setIsGroupsLoading] = useState(true);
+    const [groupsError, setGroupsError] = useState("");
+    const [isConversationLoading, setIsConversationLoading] =
+        useState(false);
+    const [conversationError, setConversationError] = useState("");
+    const [isSending, setIsSending] = useState(false);
+    const [sendError, setSendError] = useState("");
+    const [socketStatus, setSocketStatus] = useState(
+        socket.connected ? "connected" : "connecting"
+    );
 
     const [typingUserId, setTypingUserId] =
         useState(null);
@@ -46,8 +71,8 @@ function Chat() {
             const token =
                 localStorage.getItem("token");
 
-            const response = await axios.patch(
-                `http://localhost:5000/api/messages/read/${senderId}`,
+            const response = await api.patch(
+                `/messages/read/${senderId}`,
                 {},
                 {
                     headers: {
@@ -86,11 +111,12 @@ function Chat() {
     useEffect(() => {
         async function fetchUsers() {
             try {
+                setUsersError("");
                 const token =
                     localStorage.getItem("token");
 
-                const response = await axios.get(
-                    "http://localhost:5000/api/auth/users",
+                const response = await api.get(
+                    "/auth/users",
                     {
                         headers: {
                             Authorization: `Bearer ${token}`
@@ -108,6 +134,12 @@ function Chat() {
                     "Unable to fetch users:",
                     error
                 );
+                setUsersError(
+                    error.response?.data?.message ||
+                        "Unable to load users"
+                );
+            } finally {
+                setIsUsersLoading(false);
             }
         }
 
@@ -117,10 +149,11 @@ function Chat() {
     useEffect(() => {
         async function fetchGroups() {
             try {
+                setGroupsError("");
                 const token =
                     localStorage.getItem("token");
-                const response = await axios.get(
-                    "http://localhost:5000/api/groups",
+                const response = await api.get(
+                    "/groups",
                     {
                         headers: {
                             Authorization: `Bearer ${token}`
@@ -134,6 +167,12 @@ function Chat() {
                     "Unable to fetch groups:",
                     error
                 );
+                setGroupsError(
+                    error.response?.data?.message ||
+                        "Unable to load groups"
+                );
+            } finally {
+                setIsGroupsLoading(false);
             }
         }
 
@@ -163,6 +202,51 @@ function Chat() {
             socket.off("connect", joinUser);
         };
     }, [savedUser?.id]);
+
+    useEffect(() => {
+        function handleConnect() {
+            setSocketStatus("connected");
+        }
+
+        function handleDisconnect() {
+            setSocketStatus("disconnected");
+        }
+
+        function handleReconnectAttempt() {
+            setSocketStatus("reconnecting");
+        }
+
+        function handleAuthenticationError() {
+            localStorage.removeItem("token");
+            localStorage.removeItem("user");
+            localStorage.removeItem("isLoggedIn");
+            navigate("/login", { replace: true });
+        }
+
+        socket.on("connect", handleConnect);
+        socket.on("disconnect", handleDisconnect);
+        socket.on(
+            "authentication_error",
+            handleAuthenticationError
+        );
+        socket.io.on(
+            "reconnect_attempt",
+            handleReconnectAttempt
+        );
+
+        return () => {
+            socket.off("connect", handleConnect);
+            socket.off("disconnect", handleDisconnect);
+            socket.off(
+                "authentication_error",
+                handleAuthenticationError
+            );
+            socket.io.off(
+                "reconnect_attempt",
+                handleReconnectAttempt
+            );
+        };
+    }, [navigate]);
 
     useEffect(() => {
         function joinGroups() {
@@ -224,67 +308,119 @@ function Chat() {
     }, []);
 
     useEffect(() => {
+        const requestController = new AbortController();
+
         async function fetchMessages() {
             if (!selectedUser) {
                 return;
             }
 
             try {
+                setIsConversationLoading(true);
+                setConversationError("");
                 const token =
                     localStorage.getItem("token");
 
-                const response = await axios.get(
-                    `http://localhost:5000/api/messages/${selectedUser.id}`,
+                const response = await api.get(
+                    `/messages/${selectedUser.id}`,
                     {
                         headers: {
                             Authorization: `Bearer ${token}`
-                        }
+                        },
+                        signal: requestController.signal
                     }
                 );
 
-                setMessages(response.data);
+                setMessages((currentMessages) =>
+                    mergeMessages(
+                        response.data,
+                        currentMessages
+                    )
+                );
                 await markMessagesRead(
                     selectedUser.id
                 );
             } catch (error) {
+                if (error.code === "ERR_CANCELED") {
+                    return;
+                }
+
                 console.error(
                     "Unable to fetch messages:",
                     error
                 );
+                setConversationError(
+                    error.response?.data?.message ||
+                        "Unable to load this conversation"
+                );
+            } finally {
+                if (!requestController.signal.aborted) {
+                    setIsConversationLoading(false);
+                }
             }
         }
 
         fetchMessages();
+
+        return () => {
+            requestController.abort();
+        };
     }, [selectedUser]);
 
     useEffect(() => {
+        const requestController = new AbortController();
+
         async function fetchGroupMessages() {
             if (!selectedGroup) {
                 return;
             }
 
             try {
+                setIsConversationLoading(true);
+                setConversationError("");
                 const token =
                     localStorage.getItem("token");
-                const response = await axios.get(
-                    `http://localhost:5000/api/groups/${selectedGroup.id}/messages`,
+                const response = await api.get(
+                    `/groups/${selectedGroup.id}/messages`,
                     {
                         headers: {
                             Authorization: `Bearer ${token}`
-                        }
+                        },
+                        signal: requestController.signal
                     }
                 );
 
-                setMessages(response.data);
+                setMessages((currentMessages) =>
+                    mergeMessages(
+                        response.data,
+                        currentMessages
+                    )
+                );
             } catch (error) {
+                if (error.code === "ERR_CANCELED") {
+                    return;
+                }
+
                 console.error(
                     "Unable to fetch group messages:",
                     error
                 );
+                setConversationError(
+                    error.response?.data?.message ||
+                        "Unable to load this group"
+                );
+            } finally {
+                if (!requestController.signal.aborted) {
+                    setIsConversationLoading(false);
+                }
             }
         }
 
         fetchGroupMessages();
+
+        return () => {
+            requestController.abort();
+        };
     }, [selectedGroup]);
 
     useEffect(() => {
@@ -297,10 +433,13 @@ function Chat() {
                     Number(selectedUser.id)
             ) {
                 setMessages(
-                    (prevMessages) => [
-                        ...prevMessages,
-                        newMessage
-                    ]
+                    (prevMessages) =>
+                        prevMessages.some(
+                            (currentMessage) =>
+                                currentMessage.id === newMessage.id
+                        )
+                            ? prevMessages
+                            : [...prevMessages, newMessage]
                 );
 
                 await markMessagesRead(
@@ -328,10 +467,14 @@ function Chat() {
                 Number(newMessage.groupId) ===
                 Number(selectedGroup?.id)
             ) {
-                setMessages((currentMessages) => [
-                    ...currentMessages,
-                    newMessage
-                ]);
+                setMessages((currentMessages) =>
+                    currentMessages.some(
+                        (currentMessage) =>
+                            currentMessage.id === newMessage.id
+                    )
+                        ? currentMessages
+                        : [...currentMessages, newMessage]
+                );
             }
         }
 
@@ -486,7 +629,10 @@ function Chat() {
     function selectUser(user) {
         setSelectedGroup(null);
         setSelectedUser(user);
+        setMessages([]);
+        setIsConversationLoading(true);
         setMessage("");
+        setSendError("");
     }
 
     function selectGroup(group) {
@@ -500,13 +646,16 @@ function Chat() {
         clearTimeout(typingTimeoutRef.current);
         setSelectedUser(null);
         setSelectedGroup(group);
+        setMessages([]);
+        setIsConversationLoading(true);
         setMessage("");
+        setSendError("");
     }
 
     async function createGroup(name, memberIds) {
         const token = localStorage.getItem("token");
-        const response = await axios.post(
-            "http://localhost:5000/api/groups",
+        const response = await api.post(
+            "/groups",
             {
                 name,
                 memberIds
@@ -598,6 +747,7 @@ function Chat() {
         e.preventDefault();
 
         if (
+            isSending ||
             message.trim() === "" ||
             (!selectedUser && !selectedGroup)
         ) {
@@ -605,12 +755,14 @@ function Chat() {
         }
 
         try {
+            setIsSending(true);
+            setSendError("");
             const token =
                 localStorage.getItem("token");
 
             if (selectedGroup) {
-                const response = await axios.post(
-                    `http://localhost:5000/api/groups/${selectedGroup.id}/messages`,
+                const response = await api.post(
+                    `/groups/${selectedGroup.id}/messages`,
                     {
                         text: message
                     },
@@ -628,14 +780,14 @@ function Chat() {
                 ]);
                 socket.emit(
                     "send_group_message",
-                    response.data
+                    response.data.id
                 );
                 setMessage("");
                 return;
             }
 
-            const response = await axios.post(
-                "http://localhost:5000/api/messages",
+            const response = await api.post(
+                "/messages",
                 {
                     receiverId:
                         selectedUser.id,
@@ -658,7 +810,7 @@ function Chat() {
 
             socket.emit(
                 "send_message",
-                response.data
+                response.data.id
             );
 
             socket.emit(
@@ -681,15 +833,13 @@ function Chat() {
                 "Unable to send message:",
                 error
             );
+            setSendError(
+                error.response?.data?.message ||
+                    "Unable to send message"
+            );
+        } finally {
+            setIsSending(false);
         }
-    }
-
-    if (!selectedUser && !selectedGroup) {
-        return (
-            <div className="auth-page">
-                <p>No users available to chat</p>
-            </div>
-        );
     }
 
     const isSelectedUserTyping =
@@ -711,40 +861,68 @@ function Chat() {
                 savedUser={savedUser}
                 logout={logout}
                 onlineUsers={onlineUsers}
+                isUsersLoading={isUsersLoading}
+                usersError={usersError}
+                isGroupsLoading={isGroupsLoading}
+                groupsError={groupsError}
             />
 
             <section className="chat-window">
-                <ChatHeader
-                    selectedUser={selectedUser}
-                    selectedGroup={selectedGroup}
-                    onlineUsers={onlineUsers}
-                    isTyping={
-                        isSelectedUserTyping
-                    }
-                />
+                {socketStatus !== "connected" && (
+                    <div className="socket-status">
+                        {socketStatus === "reconnecting"
+                            ? "Reconnecting to chat..."
+                            : socketStatus === "connecting"
+                            ? "Connecting to chat..."
+                            : "Chat connection lost. Reconnecting..."}
+                    </div>
+                )}
 
-                <MessageList
-                    messages={messages}
-                    currentUser={savedUser}
-                    messagesEndRef={
-                        messagesEndRef
-                    }
-                    isGroup={Boolean(selectedGroup)}
-                />
+                {selectedUser || selectedGroup ? (
+                    <>
+                        <ChatHeader
+                            selectedUser={selectedUser}
+                            selectedGroup={selectedGroup}
+                            onlineUsers={onlineUsers}
+                            isTyping={isSelectedUserTyping}
+                        />
 
-                <MessageInput
-                    message={message}
-                    handleMessageChange={
-                        handleMessageChange
-                    }
-                    sendMessage={
-                        sendMessage
-                    }
-                    chatName={
-                        selectedGroup?.name ||
-                        selectedUser?.name
-                    }
-                />
+                        {isConversationLoading ? (
+                            <div className="conversation-state">
+                                Loading messages...
+                            </div>
+                        ) : conversationError ? (
+                            <div className="conversation-state error-message">
+                                {conversationError}
+                            </div>
+                        ) : (
+                            <MessageList
+                                messages={messages}
+                                currentUser={savedUser}
+                                messagesEndRef={messagesEndRef}
+                                isGroup={Boolean(selectedGroup)}
+                            />
+                        )}
+
+                        <MessageInput
+                            message={message}
+                            handleMessageChange={handleMessageChange}
+                            sendMessage={sendMessage}
+                            chatName={
+                                selectedGroup?.name ||
+                                selectedUser?.name
+                            }
+                            isSending={isSending}
+                            error={sendError}
+                        />
+                    </>
+                ) : (
+                    <div className="empty-chat-state">
+                        {isUsersLoading || isGroupsLoading
+                            ? "Loading conversations..."
+                            : "No conversations available"}
+                    </div>
+                )}
             </section>
         </div>
     );

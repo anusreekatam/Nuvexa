@@ -38,6 +38,24 @@
     border-radius: 10px;
     background: linear-gradient(135deg, #8b5cf6, #2563eb);
 }
+
+button:disabled,
+input:disabled {
+    cursor: not-allowed;
+    opacity: 0.65;
+}
+
+.form-message {
+    padding: 9px 11px;
+    border-radius: 8px;
+    font-size: 13px;
+}
+
+.error-message,
+.sidebar-error,
+.send-error {
+    color: #b91c1c;
+}
 .chat-page {
     min-height: 100vh;
     display: grid;
@@ -169,8 +187,21 @@
 }
 
 .chat-window {
+    position: relative;
     display: grid;
-    grid-template-rows: 80px 1fr 80px;
+    grid-template-rows: 80px minmax(0, 1fr) auto;
+}
+
+.socket-status {
+    position: absolute;
+    z-index: 2;
+    top: 8px;
+    right: 15px;
+    padding: 6px 10px;
+    border-radius: 8px;
+    color: #7c2d12;
+    background: #fef3c7;
+    font-size: 12px;
 }
 
 .chat-window-header {
@@ -217,6 +248,35 @@
     display: flex;
     gap: 12px;
     border-top: 1px solid red;
+}
+
+.chat-input-area {
+    border-top: 1px solid red;
+}
+
+.chat-input-area .chat-input {
+    border-top: 0;
+}
+
+.send-error {
+    margin: 6px 25px 0;
+    font-size: 12px;
+}
+
+.conversation-state,
+.empty-chat-state {
+    display: grid;
+    place-items: center;
+    padding: 25px;
+}
+
+.empty-chat-state {
+    grid-row: 1 / -1;
+}
+
+.sidebar-error {
+    margin: 0;
+    font-size: 12px;
 }
 
 .chat-input input {

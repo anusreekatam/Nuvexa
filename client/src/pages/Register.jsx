@@ -1,34 +1,43 @@
-import axios from "axios";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import api from "../api";
 
 function Register() {
     const [name, setName] = useState("");
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
+    const [error, setError] = useState("");
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     const navigate = useNavigate();
 
     async function handleSubmit(e) {
         e.preventDefault();
 
+        if (isSubmitting) {
+            return;
+        }
+
+        setError("");
+
         if (
             name.trim() === "" ||
             email.trim() === "" ||
             password.trim() === ""
         ) {
-            alert("Please fill all fields");
+            setError("Please fill all fields");
             return;
         }
 
         if (password.length < 6) {
-            alert("Password must be at least 6 characters");
+            setError("Password must be at least 6 characters");
             return;
         }
 
         try {
-            const response = await axios.post(
-                "http://localhost:5000/api/auth/register",
+            setIsSubmitting(true);
+            await api.post(
+                "/auth/register",
                 {
                     name,
                     email,
@@ -36,13 +45,14 @@ function Register() {
                 }
             );
 
-            alert(response.data.message);
             navigate("/login");
         } catch (error) {
-            alert(
+            setError(
                 error.response?.data?.message ||
-                "Registration failed"
+                "Unable to reach the server. Please try again."
             );
+        } finally {
+            setIsSubmitting(false);
         }
     }
 
@@ -81,9 +91,13 @@ function Register() {
                         setPassword(e.target.value)
                     }
                 />
-
-                <button type="submit">
-                    Register
+                {error && (
+                    <p className="form-message error-message">
+                        {error}
+                    </p>
+                )}
+                <button type="submit" disabled={isSubmitting}>
+                    {isSubmitting ? "Creating..." : "Register"}
                 </button>
 
                 <span>
