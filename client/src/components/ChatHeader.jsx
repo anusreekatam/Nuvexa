@@ -1,17 +1,38 @@
 function ChatHeader({
     selectedUser,
-    onlineUsers
+    selectedGroup,
+    onlineUsers,
+    isTyping
 }) {
+    if (selectedGroup) {
+        return (
+            <header className="chat-window-header">
+                <div>
+                    <h2>{selectedGroup.name}</h2>
+                    <p>
+                        {selectedGroup.memberships.length} members
+                    </p>
+                </div>
+            </header>
+        );
+    }
+
     const isOnline =
-        onlineUsers.includes(selectedUser.id);
+        onlineUsers.includes(
+            selectedUser.id
+        );
 
     return (
         <header className="chat-window-header">
             <div>
-                <h2>{selectedUser.name}</h2>
+                <h2>
+                    {selectedUser.name}
+                </h2>
 
                 <p>
-                    {isOnline
+                    {isTyping
+                        ? "Typing..."
+                        : isOnline
                         ? "Online"
                         : "Offline"}
                 </p>

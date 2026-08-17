@@ -1,7 +1,13 @@
+import GroupCreator from "./GroupCreator";
+
 function Sidebar({
     users,
     selectedUser,
-    setSelectedUser,
+    selectedGroup,
+    groups,
+    onSelectUser,
+    onSelectGroup,
+    onCreateGroup,
     search,
     setSearch,
     savedUser,
@@ -41,6 +47,8 @@ function Sidebar({
             />
 
             <div className="users-list">
+                <h3 className="list-title">Direct messages</h3>
+
                 {filteredUsers.map((user) => {
                     const isOnline =
                         onlineUsers.includes(user.id);
@@ -53,9 +61,7 @@ function Sidebar({
                                     ? "active"
                                     : ""
                             }`}
-                            onClick={() =>
-                                setSelectedUser(user)
-                            }
+                            onClick={() => onSelectUser(user)}
                         >
                             <div className="avatar">
                                 {user.name[0]}
@@ -76,6 +82,38 @@ function Sidebar({
 
                 {filteredUsers.length === 0 && (
                     <p>No users found</p>
+                )}
+
+                <div className="groups-heading">
+                    <h3 className="list-title">Groups</h3>
+                    <GroupCreator
+                        users={users}
+                        onCreateGroup={onCreateGroup}
+                    />
+                </div>
+
+                {groups.map((group) => (
+                    <div
+                        key={group.id}
+                        className={`chat-user ${
+                            selectedGroup?.id === group.id
+                                ? "active"
+                                : ""
+                        }`}
+                        onClick={() => onSelectGroup(group)}
+                    >
+                        <div className="avatar">#</div>
+                        <div>
+                            <h3>{group.name}</h3>
+                            <p>
+                                {group.memberships.length} members
+                            </p>
+                        </div>
+                    </div>
+                ))}
+
+                {groups.length === 0 && (
+                    <p>No groups yet</p>
                 )}
             </div>
         </aside>

@@ -1,8 +1,8 @@
 function MessageInput({
     message,
-    setMessage,
+    handleMessageChange,
     sendMessage,
-    selectedUser
+    chatName
 }) {
     return (
         <form
@@ -11,10 +11,12 @@ function MessageInput({
         >
             <input
                 type="text"
-                placeholder={`Message ${selectedUser.name}...`}
+                placeholder={`Message ${chatName}...`}
                 value={message}
                 onChange={(e) =>
-                    setMessage(e.target.value)
+                    handleMessageChange(
+                        e.target.value
+                    )
                 }
             />
 

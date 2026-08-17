@@ -19,53 +19,89 @@ function Chat() {
     const navigate = useNavigate();
 
     const messagesEndRef = useRef(null);
+    const typingTimeoutRef = useRef(null);
+    const typingIndicatorTimeoutRef = useRef(null);
+    const typingIndicatorSenderRef = useRef(null);
 
     const savedUser = JSON.parse(
         localStorage.getItem("user")
     );
 
-    const [users, setUsers] =
-        useState([]);
+    const [users, setUsers] = useState([]);
+    const [selectedUser, setSelectedUser] = useState(null);
+    const [groups, setGroups] = useState([]);
+    const [selectedGroup, setSelectedGroup] = useState(null);
 
-    const [selectedUser, setSelectedUser] =
+    const [message, setMessage] = useState("");
+    const [search, setSearch] = useState("");
+
+    const [messages, setMessages] = useState([]);
+    const [onlineUsers, setOnlineUsers] = useState([]);
+
+    const [typingUserId, setTypingUserId] =
         useState(null);
 
-    const [message, setMessage] =
-        useState("");
+    async function markMessagesRead(senderId) {
+        try {
+            const token =
+                localStorage.getItem("token");
 
-    const [search, setSearch] =
-        useState("");
+            const response = await axios.patch(
+                `http://localhost:5000/api/messages/read/${senderId}`,
+                {},
+                {
+                    headers: {
+                        Authorization: `Bearer ${token}`
+                    }
+                }
+            );
 
-    const [messages, setMessages] =
-        useState([]);
+            const readMessageIds = new Set(
+                response.data.messageIds
+            );
 
-    const [onlineUsers, setOnlineUsers] =
-        useState([]);
+            if (readMessageIds.size === 0) {
+                return;
+            }
 
-    // Fetch real users from database
+            setMessages((currentMessages) =>
+                currentMessages.map((currentMessage) =>
+                    readMessageIds.has(currentMessage.id)
+                        ? {
+                              ...currentMessage,
+                              isRead: true,
+                              readAt: response.data.readAt
+                          }
+                        : currentMessage
+                )
+            );
+        } catch (error) {
+            console.error(
+                "Unable to mark messages as read:",
+                error
+            );
+        }
+    }
+
     useEffect(() => {
         async function fetchUsers() {
             try {
                 const token =
                     localStorage.getItem("token");
 
-                const response =
-                    await axios.get(
-                        "http://localhost:5000/api/auth/users",
-                        {
-                            headers: {
-                                Authorization:
-                                    `Bearer ${token}`
-                            }
+                const response = await axios.get(
+                    "http://localhost:5000/api/auth/users",
+                    {
+                        headers: {
+                            Authorization: `Bearer ${token}`
                         }
-                    );
+                    }
+                );
 
                 setUsers(response.data);
 
                 if (response.data.length > 0) {
-                    setSelectedUser(
-                        response.data[0]
-                    );
+                    setSelectedUser(response.data[0]);
                 }
             } catch (error) {
                 console.error(
@@ -78,13 +114,41 @@ function Chat() {
         fetchUsers();
     }, []);
 
-    // Join / rejoin socket room
+    useEffect(() => {
+        async function fetchGroups() {
+            try {
+                const token =
+                    localStorage.getItem("token");
+                const response = await axios.get(
+                    "http://localhost:5000/api/groups",
+                    {
+                        headers: {
+                            Authorization: `Bearer ${token}`
+                        }
+                    }
+                );
+
+                setGroups(response.data);
+            } catch (error) {
+                console.error(
+                    "Unable to fetch groups:",
+                    error
+                );
+            }
+        }
+
+        fetchGroups();
+    }, []);
+
     useEffect(() => {
         function joinUser() {
             if (savedUser?.id) {
                 socket.emit(
                     "join_user",
-                    savedUser.id
+                    {
+                        userId: savedUser.id,
+                        token: localStorage.getItem("token")
+                    }
                 );
             }
         }
@@ -93,20 +157,54 @@ function Chat() {
             joinUser();
         }
 
-        socket.on(
-            "connect",
-            joinUser
-        );
+        socket.on("connect", joinUser);
 
         return () => {
-            socket.off(
-                "connect",
-                joinUser
-            );
+            socket.off("connect", joinUser);
         };
     }, [savedUser?.id]);
 
-    // Receive online users
+    useEffect(() => {
+        function joinGroups() {
+            groups.forEach((group) => {
+                socket.emit("join_group", group.id);
+            });
+        }
+
+        if (socket.connected) {
+            joinGroups();
+        }
+
+        socket.on("connect", joinGroups);
+
+        return () => {
+            socket.off("connect", joinGroups);
+        };
+    }, [groups]);
+
+    useEffect(() => {
+        function handleGroupCreated(group) {
+            setGroups((currentGroups) =>
+                currentGroups.some(
+                    (currentGroup) =>
+                        currentGroup.id === group.id
+                )
+                    ? currentGroups
+                    : [group, ...currentGroups]
+            );
+            socket.emit("join_group", group.id);
+        }
+
+        socket.on("group_created", handleGroupCreated);
+
+        return () => {
+            socket.off(
+                "group_created",
+                handleGroupCreated
+            );
+        };
+    }, []);
+
     useEffect(() => {
         function handleOnlineUsers(userIds) {
             setOnlineUsers(userIds);
@@ -125,7 +223,6 @@ function Chat() {
         };
     }, []);
 
-    // Fetch selected user's messages
     useEffect(() => {
         async function fetchMessages() {
             if (!selectedUser) {
@@ -136,18 +233,19 @@ function Chat() {
                 const token =
                     localStorage.getItem("token");
 
-                const response =
-                    await axios.get(
-                        `http://localhost:5000/api/messages/${selectedUser.id}`,
-                        {
-                            headers: {
-                                Authorization:
-                                    `Bearer ${token}`
-                            }
+                const response = await axios.get(
+                    `http://localhost:5000/api/messages/${selectedUser.id}`,
+                    {
+                        headers: {
+                            Authorization: `Bearer ${token}`
                         }
-                    );
+                    }
+                );
 
                 setMessages(response.data);
+                await markMessagesRead(
+                    selectedUser.id
+                );
             } catch (error) {
                 console.error(
                     "Unable to fetch messages:",
@@ -159,21 +257,54 @@ function Chat() {
         fetchMessages();
     }, [selectedUser]);
 
-    // Receive real-time messages
     useEffect(() => {
-        function handleReceiveMessage(
+        async function fetchGroupMessages() {
+            if (!selectedGroup) {
+                return;
+            }
+
+            try {
+                const token =
+                    localStorage.getItem("token");
+                const response = await axios.get(
+                    `http://localhost:5000/api/groups/${selectedGroup.id}/messages`,
+                    {
+                        headers: {
+                            Authorization: `Bearer ${token}`
+                        }
+                    }
+                );
+
+                setMessages(response.data);
+            } catch (error) {
+                console.error(
+                    "Unable to fetch group messages:",
+                    error
+                );
+            }
+        }
+
+        fetchGroupMessages();
+    }, [selectedGroup]);
+
+    useEffect(() => {
+        async function handleReceiveMessage(
             newMessage
         ) {
             if (
                 selectedUser &&
-                newMessage.senderId ===
-                    selectedUser.id
+                Number(newMessage.senderId) ===
+                    Number(selectedUser.id)
             ) {
                 setMessages(
                     (prevMessages) => [
                         ...prevMessages,
                         newMessage
                     ]
+                );
+
+                await markMessagesRead(
+                    selectedUser.id
                 );
             }
         }
@@ -191,13 +322,265 @@ function Chat() {
         };
     }, [selectedUser]);
 
-    // Auto-scroll
+    useEffect(() => {
+        function handleReceiveGroupMessage(newMessage) {
+            if (
+                Number(newMessage.groupId) ===
+                Number(selectedGroup?.id)
+            ) {
+                setMessages((currentMessages) => [
+                    ...currentMessages,
+                    newMessage
+                ]);
+            }
+        }
+
+        socket.on(
+            "receive_group_message",
+            handleReceiveGroupMessage
+        );
+
+        return () => {
+            socket.off(
+                "receive_group_message",
+                handleReceiveGroupMessage
+            );
+        };
+    }, [selectedGroup]);
+
+    useEffect(() => {
+        function handleMessagesRead({
+            messageIds,
+            readerId,
+            readAt
+        }) {
+            if (
+                Number(readerId) !==
+                Number(selectedUser?.id)
+            ) {
+                return;
+            }
+
+            const readMessageIds = new Set(
+                messageIds
+            );
+
+            setMessages((currentMessages) =>
+                currentMessages.map((currentMessage) =>
+                    readMessageIds.has(currentMessage.id)
+                        ? {
+                              ...currentMessage,
+                              isRead: true,
+                              readAt
+                          }
+                        : currentMessage
+                )
+            );
+        }
+
+        socket.on(
+            "messages_read",
+            handleMessagesRead
+        );
+
+        return () => {
+            socket.off(
+                "messages_read",
+                handleMessagesRead
+            );
+        };
+    }, [selectedUser]);
+
+    useEffect(() => {
+        function handleTyping({
+            senderId
+        }) {
+            setTypingUserId(
+                Number(senderId)
+            );
+
+            typingIndicatorSenderRef.current =
+                Number(senderId);
+
+            clearTimeout(
+                typingIndicatorTimeoutRef.current
+            );
+
+            typingIndicatorTimeoutRef.current =
+                setTimeout(() => {
+                    setTypingUserId(
+                        (currentId) =>
+                            Number(currentId) ===
+                            Number(senderId)
+                                ? null
+                                : currentId
+                    );
+
+                    typingIndicatorSenderRef.current =
+                        null;
+                }, 2000);
+        }
+
+        function handleStopTyping({
+            senderId
+        }) {
+            setTypingUserId(
+                (currentId) =>
+                    Number(currentId) ===
+                    Number(senderId)
+                        ? null
+                        : currentId
+            );
+
+            if (
+                Number(
+                    typingIndicatorSenderRef.current
+                ) === Number(senderId)
+            ) {
+                clearTimeout(
+                    typingIndicatorTimeoutRef.current
+                );
+
+                typingIndicatorSenderRef.current =
+                    null;
+            }
+        }
+
+        socket.on(
+            "user_typing",
+            handleTyping
+        );
+
+        socket.on(
+            "user_stop_typing",
+            handleStopTyping
+        );
+
+        return () => {
+            socket.off(
+                "user_typing",
+                handleTyping
+            );
+
+            socket.off(
+                "user_stop_typing",
+                handleStopTyping
+            );
+
+            clearTimeout(
+                typingIndicatorTimeoutRef.current
+            );
+
+            typingIndicatorSenderRef.current =
+                null;
+        };
+    }, []);
+
     useEffect(() => {
         messagesEndRef.current
             ?.scrollIntoView({
                 behavior: "smooth"
             });
     }, [messages]);
+
+    function selectUser(user) {
+        setSelectedGroup(null);
+        setSelectedUser(user);
+        setMessage("");
+    }
+
+    function selectGroup(group) {
+        if (selectedUser && savedUser) {
+            socket.emit("stop_typing", {
+                senderId: savedUser.id,
+                receiverId: selectedUser.id
+            });
+        }
+
+        clearTimeout(typingTimeoutRef.current);
+        setSelectedUser(null);
+        setSelectedGroup(group);
+        setMessage("");
+    }
+
+    async function createGroup(name, memberIds) {
+        const token = localStorage.getItem("token");
+        const response = await axios.post(
+            "http://localhost:5000/api/groups",
+            {
+                name,
+                memberIds
+            },
+            {
+                headers: {
+                    Authorization: `Bearer ${token}`
+                }
+            }
+        );
+
+        setGroups((currentGroups) => [
+            response.data,
+            ...currentGroups
+        ]);
+        socket.emit("join_group", response.data.id);
+        selectGroup(response.data);
+    }
+
+    function handleMessageChange(value) {
+        setMessage(value);
+
+        if (selectedGroup) {
+            return;
+        }
+
+        if (
+            !selectedUser ||
+            !savedUser
+        ) {
+            return;
+        }
+
+        clearTimeout(
+            typingTimeoutRef.current
+        );
+
+        if (value.trim() === "") {
+            socket.emit(
+                "stop_typing",
+                {
+                    senderId:
+                        savedUser.id,
+                    receiverId:
+                        selectedUser.id
+                }
+            );
+
+            return;
+        }
+
+        socket.emit(
+            "typing",
+            {
+                senderId:
+                    savedUser.id,
+                receiverId:
+                    selectedUser.id
+            }
+        );
+
+        typingTimeoutRef.current =
+            setTimeout(() => {
+                socket.emit(
+                    "stop_typing",
+                    {
+                        senderId:
+                            savedUser.id,
+                        receiverId:
+                            selectedUser.id
+                    }
+                );
+            }, 1200);
+    }
 
     function logout() {
         localStorage.removeItem("token");
@@ -216,7 +599,7 @@ function Chat() {
 
         if (
             message.trim() === "" ||
-            !selectedUser
+            (!selectedUser && !selectedGroup)
         ) {
             return;
         }
@@ -225,12 +608,10 @@ function Chat() {
             const token =
                 localStorage.getItem("token");
 
-            const response =
-                await axios.post(
-                    "http://localhost:5000/api/messages",
+            if (selectedGroup) {
+                const response = await axios.post(
+                    `http://localhost:5000/api/groups/${selectedGroup.id}/messages`,
                     {
-                        receiverId:
-                            selectedUser.id,
                         text: message
                     },
                     {
@@ -240,6 +621,33 @@ function Chat() {
                         }
                     }
                 );
+
+                setMessages((currentMessages) => [
+                    ...currentMessages,
+                    response.data
+                ]);
+                socket.emit(
+                    "send_group_message",
+                    response.data
+                );
+                setMessage("");
+                return;
+            }
+
+            const response = await axios.post(
+                "http://localhost:5000/api/messages",
+                {
+                    receiverId:
+                        selectedUser.id,
+                    text: message
+                },
+                {
+                    headers: {
+                        Authorization:
+                            `Bearer ${token}`
+                    }
+                }
+            );
 
             setMessages(
                 (prevMessages) => [
@@ -253,6 +661,20 @@ function Chat() {
                 response.data
             );
 
+            socket.emit(
+                "stop_typing",
+                {
+                    senderId:
+                        savedUser.id,
+                    receiverId:
+                        selectedUser.id
+                }
+            );
+
+            clearTimeout(
+                typingTimeoutRef.current
+            );
+
             setMessage("");
         } catch (error) {
             console.error(
@@ -262,63 +684,65 @@ function Chat() {
         }
     }
 
-    if (!selectedUser) {
+    if (!selectedUser && !selectedGroup) {
         return (
             <div className="auth-page">
-                <p>
-                    No users available to chat
-                </p>
+                <p>No users available to chat</p>
             </div>
         );
     }
+
+    const isSelectedUserTyping =
+        Number(typingUserId) ===
+        Number(selectedUser?.id);
 
     return (
         <div className="chat-page">
             <Sidebar
                 users={users}
-                selectedUser={
-                    selectedUser
-                }
-                setSelectedUser={
-                    setSelectedUser
-                }
+                selectedUser={selectedUser}
+                selectedGroup={selectedGroup}
+                groups={groups}
+                onSelectUser={selectUser}
+                onSelectGroup={selectGroup}
+                onCreateGroup={createGroup}
                 search={search}
                 setSearch={setSearch}
                 savedUser={savedUser}
                 logout={logout}
-                onlineUsers={
-                    onlineUsers
-                }
+                onlineUsers={onlineUsers}
             />
 
             <section className="chat-window">
                 <ChatHeader
-                    selectedUser={
-                        selectedUser
-                    }
-                    onlineUsers={
-                        onlineUsers
+                    selectedUser={selectedUser}
+                    selectedGroup={selectedGroup}
+                    onlineUsers={onlineUsers}
+                    isTyping={
+                        isSelectedUserTyping
                     }
                 />
 
                 <MessageList
                     messages={messages}
-                    currentUser={
-                        savedUser
-                    }
+                    currentUser={savedUser}
                     messagesEndRef={
                         messagesEndRef
                     }
+                    isGroup={Boolean(selectedGroup)}
                 />
 
                 <MessageInput
                     message={message}
-                    setMessage={setMessage}
+                    handleMessageChange={
+                        handleMessageChange
+                    }
                     sendMessage={
                         sendMessage
                     }
-                    selectedUser={
-                        selectedUser
+                    chatName={
+                        selectedGroup?.name ||
+                        selectedUser?.name
                     }
                 />
             </section>

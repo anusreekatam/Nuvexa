@@ -1,7 +1,8 @@
 function MessageList({
     messages,
     currentUser,
-    messagesEndRef
+    messagesEndRef,
+    isGroup
 }) {
     return (
         <div className="chat-messages">
@@ -10,8 +11,8 @@ function MessageList({
             ) : (
                 messages.map((msg) => {
                     const type =
-                        msg.senderId ===
-                        currentUser.id
+                        Number(msg.senderId) ===
+                        Number(currentUser.id)
                             ? "sent"
                             : "received";
 
@@ -31,12 +32,26 @@ function MessageList({
                             key={msg.id}
                             className={`bubble ${type}`}
                         >
+                            {isGroup && type === "received" && (
+                                <strong className="message-sender">
+                                    {msg.sender?.name}
+                                </strong>
+                            )}
+
                             <span>
                                 {msg.text}
                             </span>
 
                             <small>
                                 {time}
+                                {!isGroup && type === "sent" && (
+                                    <>
+                                        {" · "}
+                                        {msg.isRead
+                                            ? "Seen"
+                                            : "Sent"}
+                                    </>
+                                )}
                             </small>
                         </div>
                     );
